@@ -9,10 +9,18 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class RtcController {
 
+    //1대1
     @GetMapping("/")
     public String page()
     {
         return "index";
+    }
+
+    //다대다
+    @GetMapping("/multi")
+    public String multi()
+    {
+        return "multi";
     }
 
 }
