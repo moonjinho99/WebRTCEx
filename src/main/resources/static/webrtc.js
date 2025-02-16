@@ -1,6 +1,7 @@
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-const signalingServer = new WebSocket("ws://localhost:8888/signaling"); // WebSocket 서버 주소
+//const signalingServer = new WebSocket("ws://localhost:8888/signaling"); // WebSocket 서버 주소
+const signalingServer = new WebSocket("wss://tutor-tutee.shop/signaling");
 
 let localStream;
 let peerConnection;
