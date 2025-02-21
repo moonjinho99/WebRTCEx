@@ -23,4 +23,10 @@ public class RtcController {
         return "multi";
     }
 
+    @GetMapping("/ssePage")
+    public String ssePage()
+    {
+        return "ssePage";
+    }
+
 }

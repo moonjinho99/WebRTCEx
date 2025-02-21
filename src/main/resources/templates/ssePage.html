@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE 실시간 알림</title>
+    <style>
+        #messages p { padding: 5px; border-radius: 5px; margin: 5px 0; }
+        .follow { background: #ffeb3b; padding: 10px; } /* 노란색 */
+        .like { background: #ff5722; padding: 10px; }   /* 주황색 */
+        .lecture { background: #4caf50; padding: 10px; } /* 초록색 */
+    </style>
+</head>
+<body>
+<h2>실시간 알림 테스트</h2>
+<div id="messages"></div>
+
+<script>
+    const userId = prompt("사용자 ID를 입력하세요 (예: user123)"); // 사용자 ID 입력받기
+    const clientId = "client_" + Math.random().toString(36).substring(7);
+    const eventSource = new EventSource(`/sse/subscribe?userId=${userId}&clientId=${clientId}`);
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        const messageDiv = document.getElementById("messages");
+        const newMessage = document.createElement("p");
+
+        newMessage.textContent = data.message;
+
+        // 알림 타입에 따라 스타일 적용
+        switch (data.type) {
+            case "FOLLOW_REQUEST":
+                newMessage.classList.add("follow");
+                break;
+            case "POST_LIKE":
+                newMessage.classList.add("like");
+                break;
+            case "LECTURE_START":
+                newMessage.classList.add("lecture");
+                break;
+        }
+
+        messageDiv.appendChild(newMessage);
+    };
+
+    // 자동 재연결 기능 추가
+    eventSource.onerror = function() {
+        console.error("SSE 연결 종료됨, 5초 후 재연결...");
+        setTimeout(() => {
+            eventSource = new EventSource(`/sse/subscribe?userId=${userId}&clientId=${clientId}`);
+        }, 5000);
+    };
+</script>
+</body>
+</html>
