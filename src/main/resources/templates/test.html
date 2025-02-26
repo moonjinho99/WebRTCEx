@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE 알림 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #messages {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+        .message {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+        .message:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>SSE 알림 테스트</h2>
+
+    <label for="memberNum">회원 번호 입력:</label>
+    <input type="number" id="memberNum" placeholder="예: 1">
+    <button onclick="subscribe()">구독 시작</button>
+    <button onclick="unsubscribe()">구독 종료</button>
+
+    <h3>🔔 실시간 알림</h3>
+    <div id="messages"></div>
+
+    <script>
+        let eventSource = null;
+
+        function subscribe() {
+            const memberNum = document.getElementById("memberNum").value;
+            if (!memberNum) {
+                alert("회원 번호를 입력하세요!");
+                return;
+            }
+
+            // 기존 연결 종료 후 다시 연결
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            const url = `http://localhost:8787/alim/subscribe?memberNum=${memberNum}`;
+            eventSource = new EventSource(url);
+
+            eventSource.onmessage = function(event) {
+                console.log("🔔 알림 도착:", event.data);
+                displayMessage(event.data);
+            };
+
+            eventSource.onerror = function() {
+                console.error("🚨 SSE 연결 오류 발생!");
+                eventSource.close();
+            };
+        }
+
+        function unsubscribe() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                console.log("🚫 구독 종료");
+            }
+        }
+
+        function displayMessage(message) {
+            const messagesDiv = document.getElementById("messages");
+            const newMessage = document.createElement("div");
+            newMessage.className = "message";
+            newMessage.textContent = message;
+            messagesDiv.appendChild(newMessage);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+
+</body>
+</html>
