@@ -25,6 +25,7 @@
             border-bottom: none;
         }
     </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
 
@@ -34,6 +35,8 @@
     <input type="number" id="memberNum" placeholder="예: 1">
     <button onclick="subscribe()">구독 시작</button>
     <button onclick="unsubscribe()">구독 종료</button>
+
+    <button onclick="send()">알림 테스트</button>
 
     <h3>🔔 실시간 알림</h3>
     <div id="messages"></div>
@@ -53,7 +56,9 @@
                 eventSource.close();
             }
 
-            const url = `http://localhost:8787/alim/subscribe?memberNum=${memberNum}`;
+            //const url = `http://localhost:8787/alim/subscribe?memberNum=${memberNum}`;
+            const url = `https://tutor-tutee.shop/alim/subscribe?memberNum=${memberNum}`;
+
             eventSource = new EventSource(url);
 
             eventSource.onmessage = function(event) {
@@ -74,6 +79,23 @@
                 console.log("🚫 구독 종료");
             }
         }
+
+       function send() {
+        const memberNum = document.getElementById("memberNum").value;
+
+            $.ajax({
+                url: "https://tutor-tutee.shop/send",
+                type: "GET",
+                data: { memberNum: memberNum }, // 쿼리 파라미터
+                success: function(response) {
+                    console.log("서버 응답:", response);
+                },
+                error: function(xhr, status, error) {
+                    console.error("오류 발생:", error);
+                }
+            });
+        }
+
 
         function displayMessage(message) {
             const messagesDiv = document.getElementById("messages");

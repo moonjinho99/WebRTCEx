@@ -34,4 +34,10 @@ public class RtcController {
     {
         return "test";
     }
+
+    @GetMapping("/chat")
+    public String chat()
+    {
+        return "chat";
+    }
 }
