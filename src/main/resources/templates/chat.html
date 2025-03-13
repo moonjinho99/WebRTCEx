@@ -32,7 +32,8 @@
 
   function connect() {
       roomId = document.getElementById("room-id").value;
-      const socket = new SockJS("http://localhost:8787/chattings");
+      //const socket = new SockJS("http://localhost:8787/chattings");
+      const socket = new SockJS("https://tutor-tutee.shop/chattings");
       stompClient = Stomp.over(socket);
 
       stompClient.connect({}, function () {

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 화상 채팅</title>
+</head>
+<body>
+<h2>WebRTC 화상 채팅</h2>
+<button id="createRoom">방 생성</button>
+<input type="text" id="roomIdInput" placeholder="방 ID 입력">
+<button id="joinRoom">방 참가</button>
+<button id="toggleStream">화면 공유</button>
+<video id="localVideo" autoplay playsinline></video>
+<video id="remoteVideo" autoplay playsinline></video>
+
+<script>
+    const socket = new WebSocket("ws://localhost:8787/signaling");  // WebSocket 연결
+    let localStream;
+    let screenStream;
+    let isScreenSharing = false;
+    let peerConnection;
+    let roomId;
+
+    // 웹소켓 메시지 수신
+    socket.onmessage = async (message) => {
+        const data = JSON.parse(message.data);
+        console.log("받은 메시지:", data);
+
+        switch (data.type) {
+            case "new_member":
+                createOffer();
+                break;
+            case "offer":
+                await handleOffer(data);
+                break;
+            case "answer":
+                await handleAnswer(data);
+                break;
+            case "candidate":
+                if (peerConnection) {
+                    peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+                break;
+            case "participant_leave":
+                closeConnection();
+                break;
+            case "screen_share":
+                handleScreenShare(data);
+                break;
+            case "stop_screen_share":
+                handleStopScreenShare();
+                break;
+        }
+    };
+
+    // 방 생성
+    document.getElementById("createRoom").addEventListener("click", () => {
+        roomId = Math.random().toString(36).substring(2, 10);
+        socket.send(JSON.stringify({ type: "create_room", roomId }));
+        initMedia();
+    });
+
+    // 방 참가
+    document.getElementById("joinRoom").addEventListener("click", () => {
+        roomId = document.getElementById("roomIdInput").value;
+        if (!roomId) return alert("방 ID를 입력하세요.");
+        socket.send(JSON.stringify({ type: "join_room", roomId }));
+        initMedia();
+    });
+
+    // 화면 공유 토글
+    document.getElementById("toggleStream").addEventListener("click", () => {
+        toggleStream();
+    });
+
+    // 미디어 스트림 초기화
+    async function initMedia() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById("localVideo").srcObject = localStream;
+        } catch (error) {
+            console.error("미디어 스트림 오류:", error);
+        }
+    }
+
+    // WebRTC 피어 연결 생성
+    function createPeerConnection() {
+        peerConnection = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        });
+
+        // ICE 후보 처리
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.send(JSON.stringify({
+                    type: "candidate",
+                    roomId,
+                    candidate: event.candidate
+                }));
+            }
+        };
+
+        // 원격 스트림 설정
+        peerConnection.ontrack = (event) => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+        };
+
+        // 로컬 스트림 추가
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    }
+
+    // Offer 생성 및 전송
+    async function createOffer() {
+        createPeerConnection();
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        socket.send(JSON.stringify({
+            type: "offer",
+            roomId,
+            offer
+        }));
+    }
+
+    // Offer 수신 및 처리
+    async function handleOffer(data) {
+        createPeerConnection();
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        socket.send(JSON.stringify({
+            type: "answer",
+            roomId,
+            answer
+        }));
+    }
+
+    // Answer 수신 및 처리
+    async function handleAnswer(data) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    }
+
+    // 연결 종료
+    function closeConnection() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+    }
+
+    // 화면 공유 시작 및 중지
+    async function toggleStream() {
+        if (!isScreenSharing) {
+            // 화면 공유 시작
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                switchStream(screenStream);
+                isScreenSharing = true;
+
+                // 다른 참가자들에게 화면 공유 시작 알림
+                socket.send(JSON.stringify({
+                    type: "screen_share",
+                    roomId
+                }));
+
+            } catch (error) {
+                console.error("화면 공유 오류:", error);
+            }
+        } else {
+            // 기존 카메라 스트림으로 복구
+            switchStream(localStream);
+            isScreenSharing = false;
+
+            // 다른 참가자들에게 화면 공유 중지 알림
+            socket.send(JSON.stringify({
+                type: "stop_screen_share",
+                roomId
+            }));
+        }
+    }
+
+    // 스트림 변경
+    function switchStream(newStream) {
+        // 비디오 태그에 새로운 스트림 설정
+        document.getElementById("localVideo").srcObject = newStream;
+
+        // 기존 트랙 제거 후 새로운 트랙 추가
+        const senders = peerConnection.getSenders();
+        senders.forEach(sender => {
+            if (sender.track.kind === "video") {
+                sender.replaceTrack(newStream.getVideoTracks()[0]);
+            }
+        });
+    }
+
+    // 방장이 화면 공유를 시작했을 때
+    async function handleScreenShare(data) {
+        alert("방장이 화면을 공유하고 있습니다.");
+
+        // 새로운 스트림을 수신할 준비
+        peerConnection.ontrack = (event) => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+        };
+    }
+
+    // 방장이 화면 공유를 중지했을 때
+    function handleStopScreenShare() {
+        alert("방장의 화면 공유가 종료되었습니다.");
+
+        // 다시 원래의 영상 스트림을 설정
+        peerConnection.ontrack = (event) => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+        };
+    }
+
+    // 웹소켓 연결 종료 시
+    socket.onclose = () => console.log("웹소켓 연결 종료됨");
+</script>
+</body>
+</html>

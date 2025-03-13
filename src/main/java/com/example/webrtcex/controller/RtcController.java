@@ -40,4 +40,17 @@ public class RtcController {
     {
         return "chat";
     }
+
+    @GetMapping("/websocket")
+    public String websocket()
+    {
+        return "websocket";
+    }
+
+    @GetMapping("/rtcex")
+    public String rtcex()
+    {
+        return "rtcex";
+    }
+
 }
