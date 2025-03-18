@@ -18,20 +18,31 @@
 <div>
   <label>채팅방 ID: </label>
   <input type="number" id="room-id" value="1" min="1">
+  <label>닉네임: </label>
+  <input type="text" id="nickname" placeholder="닉네임 입력">
   <button onclick="connect()">연결</button>
 </div>
 <div id="chat-box"></div>
 <div>
   <input type="text" id="message-input" placeholder="메시지를 입력하세요">
   <button id="send-btn" onclick="sendMessage()">전송</button>
+  <button id="leave-btn" onclick="leaveRoom()">방 나가기</button>
 </div>
 
 <script>
   let stompClient = null;
   let roomId = 1;
+  let nickname = "";
 
   function connect() {
       roomId = document.getElementById("room-id").value;
+      nickname = document.getElementById("nickname").value.trim();
+
+      if (!nickname) {
+          alert("닉네임을 입력하세요.");
+          return;
+      }
+
       //const socket = new SockJS("http://localhost:8787/chattings");
       const socket = new SockJS("https://tutor-tutee.shop/chattings");
       stompClient = Stomp.over(socket);
@@ -39,11 +50,19 @@
       stompClient.connect({}, function () {
           console.log("WebSocket 연결 성공");
 
-          // 구독 설정
+          // 채팅방 구독
           stompClient.subscribe(`/sub/${roomId}`, function (message) {
               let chatMessage = JSON.parse(message.body);
-              showMessage(`[${chatMessage.sender}] ${chatMessage.content}`);
+              showMessage(`[${chatMessage.nickname}] ${chatMessage.content}`);
           });
+
+          // 방 참여 메시지 전송
+          let joinMessage = {
+              type: "TYPE_IN",
+              nickname: nickname,
+              content: `${nickname}님이 방에 참여했습니다.`
+          };
+          stompClient.send(`/pub/${roomId}/messages`, {}, JSON.stringify(joinMessage));
 
           showMessage(`채팅방 ${roomId}에 연결되었습니다.`);
       });
@@ -53,12 +72,28 @@
       let messageContent = document.getElementById("message-input").value.trim();
       if (stompClient && stompClient.connected && messageContent) {
           let chatMessage = {
-              content: messageContent,
-              sender: "사용자1"
+              type: "TYPE_TEXT",
+              nickname: nickname,
+              content: messageContent
           };
 
           stompClient.send(`/pub/${roomId}/messages`, {}, JSON.stringify(chatMessage));
           document.getElementById("message-input").value = "";
+      }
+  }
+
+  function leaveRoom() {
+      if (stompClient && stompClient.connected) {
+          let leaveMessage = {
+              type: "TYPE_OUT",
+              nickname: nickname,
+              content: `${nickname}님이 방을 나갔습니다.`
+          };
+
+          stompClient.send(`/pub/${roomId}/messages`, {}, JSON.stringify(leaveMessage));
+
+          stompClient.disconnect();
+          showMessage(`채팅방 ${roomId}에서 나갔습니다.`);
       }
   }
 
