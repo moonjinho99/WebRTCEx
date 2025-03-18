@@ -56,8 +56,8 @@
                 eventSource.close();
             }
 
-            const url = `http://localhost:8787/alim/subscribe?memberNum=${memberNum}`;
-            //const url = `https://tutor-tutee.shop/alim/subscribe?memberNum=${memberNum}`;
+            //const url = `http://localhost:8787/alim/subscribe?memberNum=${memberNum}`;
+            const url = `https://tutor-tutee.shop/alim/subscribe?memberNum=${memberNum}`;
 
             eventSource = new EventSource(url);
 
@@ -84,8 +84,7 @@
         const memberNum = document.getElementById("memberNum").value;
 
             $.ajax({
-                //url: "https://tutor-tutee.shop/alim/send",
-                url: "http://localhost:8787/alim/send",
+                url: "https://tutor-tutee.shop/send",
                 type: "GET",
                 data: { memberNum: memberNum }, // 쿼리 파라미터
                 success: function(response) {
