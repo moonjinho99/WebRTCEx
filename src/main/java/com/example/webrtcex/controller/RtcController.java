@@ -53,4 +53,9 @@ public class RtcController {
         return "rtcex";
     }
 
+    @GetMapping("/rtcex2")
+    public String rtcex2()
+    {
+        return "rtcex2";
+    }
 }

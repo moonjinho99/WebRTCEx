@@ -51,8 +51,8 @@
           return;
       }
 
-      //const socket = new SockJS("http://localhost:8787/chattings");
-      const socket = new SockJS("https://tutor-tutee.shop/chattings");
+      const socket = new SockJS("http://localhost:8787/chattings");
+      //const socket = new SockJS("https://tutor-tutee.shop/chattings");
 
       stompClient = Stomp.over(socket);
 
