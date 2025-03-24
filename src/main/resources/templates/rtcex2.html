@@ -5,160 +5,112 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebRTC 화면 공유</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
-  <style>
-    body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-    }
-    video {
-        width: 80%;
-        max-width: 800px;
-        border: 2px solid black;
-        margin: 10px;
-    }
-    #controls {
-        margin: 10px;
-    }
-  </style>
 </head>
 <body>
-<h1>WebRTC 화면 공유</h1>
-
-<div id="controls">
-  <input type="text" id="roomIdInput" placeholder="방 ID 입력" />
-  <button id="startButton">방 생성 및 화면 공유</button>
-  <button id="joinButton">방 참여</button>
-</div>
-
-<h3>호스트 화면</h3>
-<video id="hostVideo" autoplay playsinline></video>
-
-<h3>참여자 화면</h3>
-<video id="participantVideo" autoplay playsinline></video>
+<h2>WebRTC 화면 공유</h2>
+<label>방 ID: <input type="text" id="roomId" /></label>
+<button onclick="createRoom()">방 생성</button>
+<button onclick="joinRoom()">방 입장</button>
+<button id="shareButton" onclick="startScreenShare()" disabled>화면 공유 시작</button>
+<video id="localVideo" autoplay playsinline></video>
+<video id="remoteVideo" autoplay playsinline></video>
 
 <script>
-  let roomId;
-  const socket = new SockJS("http://localhost:8787/signaling"); // WebSocket 연결
+  const ws = new SockJS('http://localhost:8787/signaling');
+  let isRoomOwner = false;
   let peerConnection;
-  let localStream;
 
-  const config = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }] // STUN 서버 설정
+  ws.onopen = () => {
+      console.log("WebSocket 연결됨");
   };
 
-  // WebSocket 연결 이벤트
-  socket.onopen = () => console.log("SockJS 연결됨");
+  ws.onmessage = async (event) => {
+      const data = JSON.parse(event.data);
+      console.log("서버에서 받은 메시지:", data);
 
-  socket.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-      console.log("메시지 수신:", message);
-
-      if (message.type === "offer") {
-          await handleOffer(message);
-      } else if (message.type === "answer") {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
-      } else if (message.type === "candidate") {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
-      }
-  };
-
-  let isOfferSent = false;
-  let isCandidateSent = false;
-
-  // 방 생성 및 화면 공유 시작
-  document.getElementById("startButton").onclick = async () => {
-      if (isOfferSent) return; // 이미 Offer가 전송되었으면 다시 전송하지 않음
-
-      roomId = document.getElementById("roomIdInput").value.trim();
-      if (!roomId) {
-          alert("방 ID를 입력하세요!");
-          return;
-      }
-
-      // 화면 공유 시작
-      localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      document.getElementById("hostVideo").srcObject = localStream;
-
-      peerConnection = new RTCPeerConnection(config);
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-      peerConnection.onicecandidate = event => {
-          if (event.candidate && !isCandidateSent) {
-              socket.send(JSON.stringify({
-                  type: "candidate",
-                  candidate: event.candidate,
-                  roomId: roomId
+      switch (data.type) {
+          case "new_member":
+              if (isRoomOwner) {
+                  console.log("참여자 입장, Offer 전송");
+                  const offer = await peerConnection.createOffer();
+                  await peerConnection.setLocalDescription(offer);
+                  ws.send(JSON.stringify({
+                      type: "offer",
+                      roomId: data.roomId,
+                      sdp: offer.sdp
+                  }));
+              }
+              break;
+          case "offer":
+              console.log("Offer 받음");
+              await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: data.sdp }));
+              const answer = await peerConnection.createAnswer();
+              await peerConnection.setLocalDescription(answer);
+              ws.send(JSON.stringify({
+                  type: "answer",
+                  roomId: data.roomId,
+                  sdp: answer.sdp
               }));
-              isCandidateSent = true; // 첫 번째 candidate만 보내도록 설정
+              break;
+          case "answer":
+              console.log("Answer 받음");
+              await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: data.sdp }));
+              break;
+          case "candidate":
+              console.log("ICE Candidate 받음");
+              if (peerConnection) {
+                  peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+              }
+              break;
+          case "error":
+              console.error("서버 오류:", data.message);
+              break;
+      }
+  };
+
+  async function createPeerConnection() {
+      peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+
+      peerConnection.ontrack = (event) => {
+          document.getElementById('remoteVideo').srcObject = event.streams[0];
+      };
+
+      peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+              ws.send(JSON.stringify({
+                  type: "candidate",
+                  roomId: document.getElementById('roomId').value,
+                  candidate: event.candidate
+              }));
           }
       };
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-
-      // 방 생성 및 Offer 전송
-      socket.send(JSON.stringify({
-          type: "create_room",
-          roomId: roomId
-      }));
-
-      socket.send(JSON.stringify({
-          type: "offer",
-          sdp: offer.sdp,
-          roomId: roomId
-      }));
-
-      isOfferSent = true; // Offer 전송 완료
-  };
-
-  // 방 참여
-  document.getElementById("joinButton").onclick = async () => {
-      roomId = document.getElementById("roomIdInput").value.trim();
-      if (!roomId) {
-          alert("방 ID를 입력하세요!");
-          return;
-      }
-
-      peerConnection = new RTCPeerConnection(config);
-
-      peerConnection.ontrack = event => {
-          document.getElementById("participantVideo").srcObject = event.streams[0];
-      };
-
-      peerConnection.onicecandidate = event => {
-          if (event.candidate && !isCandidateSent) {
-              socket.send(JSON.stringify({
-                  type: "candidate",
-                  candidate: event.candidate,
-                  roomId: roomId
-              }));
-              isCandidateSent = true;
-          }
-      };
-
-      // 방 참여 메시지 전송
-      socket.send(JSON.stringify({
-          type: "join_room",
-          roomId: roomId
-      }));
-
-      // 다른 유저에게 참여자 입장 메시지 전송 (Offer를 기다림)
-  };
-
-  // Offer 처리
-  async function handleOffer(offerMessage) {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(offerMessage.sdp));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      // Answer를 방에 전송
-      socket.send(JSON.stringify({
-          type: "answer",
-          sdp: answer.sdp,
-          roomId: roomId
-      }));
   }
 
+  async function startScreenShare() {
+      if (!isRoomOwner) return;
+      try {
+          const localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+          document.getElementById('localVideo').srcObject = localStream;
+          localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      } catch (error) {
+          console.error('화면 공유 실패:', error);
+      }
+  }
+
+  function createRoom() {
+      isRoomOwner = true;
+      document.getElementById('shareButton').disabled = false;
+      ws.send(JSON.stringify({ type: 'create_room', roomId: document.getElementById('roomId').value }));
+
+      // 방을 생성하면서 바로 peerConnection을 생성하고 화면 공유를 시작할 수 있도록 함
+      createPeerConnection();
+      startScreenShare();  // 방 생성 후 화면 공유 시작
+  }
+
+  async function joinRoom() {
+      ws.send(JSON.stringify({ type: 'join_room', roomId: document.getElementById('roomId').value }));
+      await createPeerConnection(); // 참여 시 peerConnection을 생성
+  }
 </script>
 </body>
 </html>
