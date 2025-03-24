@@ -16,7 +16,8 @@
 <video id="remoteVideo" autoplay playsinline></video>
 
 <script>
-  const ws = new SockJS('http://localhost:8787/signaling');
+  //const ws = new SockJS('http://localhost:8787/signaling');
+  const ws = new SockJS('https://tutor-tutee.shop/signaling');
   let isRoomOwner = false;
   let peerConnection;
 
